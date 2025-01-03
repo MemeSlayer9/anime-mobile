@@ -44,7 +44,7 @@ const RecentEpisodes = () => {
       <Image source={{ uri: item.image }} style={styles.image} />
       <View style={styles.textContainer}>
          <Text style={[styles.title, { width: 150 }]} numberOfLines={1} ellipsizeMode="tail">
-            {item.title.english}
+            {item.title.romaji}
           </Text>
        
       </View>

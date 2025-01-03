@@ -4,6 +4,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import HomeTabs from './HomeTabs'; // Import HomeTabs
 import Hello from './Hello'; // Import WatchStack
 import Watch from './Watch'; // Import Watch component
+import Watch2 from './Watch2'; // Import Watch component
+
 import EpisodeDetail from './EpisodeDetail';
 import SearchHeader from './SearchHeader'; // Import the SearchHeader component
  import * as NavigationBar from 'expo-navigation-bar';
@@ -44,6 +46,11 @@ export default function MainStack() {
        <Stack.Screen
         name="Watch"
         component={Watch}
+        options={{ headerShown: false }} // Customize header if needed
+      />
+          <Stack.Screen
+        name="Watch2"
+        component={Watch2}
         options={{ headerShown: false }} // Customize header if needed
       />
       <Stack.Screen name="Hello" component={Hello} />

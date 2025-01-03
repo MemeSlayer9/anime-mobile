@@ -7,7 +7,7 @@ import { useEpisode } from '../context/EpisodeProvider';
 import { useMyId } from '../context/PlaylistProvider';
 import { Ionicons } from '@expo/vector-icons';
 import { useID } from '../context/IdProvider';
-import { subTosub, dubTodub, zoroProxyId } from '../Provider/imageMappings';
+import { subTosub, dubTodub } from '../Provider/imageMappings';
 
  
 
@@ -15,7 +15,7 @@ const EpisodeDetail = ({ route }) => {
   const navigation = useNavigation();
   const { setsMyListID } = useMyId();
   const { selectId, setselectid } = useID();
-  const { selectedEpisodeId, setSelectedEpisodeId, setSelectedEpisodeNumber, selectedEpisodeNumber } = useEpisode();
+  const { selectedEpisodeId, setSelectedEpisodeId } = useEpisode();
   const { id } = route.params;
     const [provider, setProvider] = useState(''); // State to manage selected provider
 const [zoroId, setZoroId] = useState("");
@@ -36,7 +36,7 @@ const [episodes3, setEpisodes3] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
         const [countdown, setCountdown] = useState('');
   const [activeTab, setActiveTab] = useState('description'); // Default tab
-const [activeTab2, setActiveTab2] = useState("episodes3"); // State for active tab
+const [activeTab2, setActiveTab2] = useState("episodes2"); // State for active tab
 
 
 
@@ -53,7 +53,6 @@ const GogoDub = {
   ...dubTodub,
   // Add any additional mappings if necessary
 };
-console.log(zoroProxyId);
   // Format titles based on romaji
   useEffect(() => {
     if (item?.title?.romaji) {
@@ -121,11 +120,8 @@ const fetchProvider = async () => {
 
   const fetchDetail2 = async () => {
     try {
-
-          const resolvedZoroId = zoroProxyId[zoroId] || zoroId;
-
       const response = await axios.get(
-        `https://baba-mu-nine.vercel.app/api/v2/hianime/anime/${resolvedZoroId}`
+        `https://baba-mu-nine.vercel.app/api/v2/hianime/anime/${zoroId}`
       );
       console.log('Full API Response:', response.data); // Log to debug
       setItem4(response.data?.data || null); // Ensure null if data is missing
@@ -229,12 +225,9 @@ const fetchEpisode2 = async () => {
 const fetchEpisode3 = async () => {
   setLoading(true); // Set loading state
   try {
-    // Resolve zoroId from mapping
-    const resolvedZoroId = zoroProxyId[zoroId] || zoroId;
-
-    const response = await axios.get(`https://baba-mu-nine.vercel.app/api/v2/hianime/anime/${resolvedZoroId}/episodes`);
-    setEpisodes3(response.data?.data?.episodes || []); // Safely access episodes array
-    console.log(`Fetching episodes from: https://baba-mu-nine.vercel.app/api/v2/hianime/anime/${resolvedZoroId}/episodes`);
+    const response = await axios.get(`https://baba-mu-nine.vercel.app/api/v2/hianime/anime/${zoroId}/episodes`);
+setEpisodes3(response.data?.data?.episodes || []); // Safely access episodes array
+    console.log(`Fetching episodes from: https://baba-mu-nine.vercel.app/api/v2/hianime/anime/${zoroId}/episodes`);
   } catch (error) {
     if (error.response && error.response.status === 404) {
       // Handle 404 error specifically
@@ -365,30 +358,28 @@ useEffect(() => {
   
 
   const renderEpisode3 = ({ item }) => (
-   <TouchableOpacity
+  <TouchableOpacity
     onPress={async () => {
-      // Properly construct the encoded episode ID
-      const selectedEpisodeId = item.episodeId;
-      const selectId = item4?.anime?.info?.id;
-      const selectedEpisodeNumber = item?.number;
+        const selectedEpisodeId = item.episodeId;
+        const selectId = item4?.anime?.info?.id;
 
-      setSelectedEpisodeId(selectedEpisodeId);
-      setselectid(selectId);
-      setSelectedEpisodeNumber(selectedEpisodeNumber);
+         setSelectedEpisodeId(selectedEpisodeId);
+                  setselectid(selectId);
 
-      navigation.navigate('Watch2', {
-        episodeid: selectedEpisodeId, // Pass the encoded episode ID
-        id: selectId,
-        selectedEpisodeNumber : selectedEpisodeNumber
+       navigation.navigate('Watch2', {
+        episodeid: item.episodeId,
+                id: item4?.anime?.info?.id, // Passing episode2.id as a parameter
+
+       
       });
     }}
     style={styles.episodeContainer}
   >
-      <Image source={{ uri: item4?.anime?.info?.poster }} style={styles.episodeImage} />
+     <Image source={{ uri: item4?.anime?.info?.poster }} style={styles.episodeImage} />
 
            <View style={styles.textContainer}>
  
-        <Text style={styles.episodeTitle}>{item.title}</Text>
+    <Text style={styles.episodeTitle}> {item.episodeId}</Text>
         <Text style={styles.episodeTitle}>Episode {item.number}</Text>
 
     </View>
@@ -662,67 +653,67 @@ useEffect(() => {
 }
 
  
- 
+  {item2?.id_provider && (
+ <View style={styles.tabContainer}>
+     <TouchableOpacity onPress={() => handleProviderClick('idGogo')}  style={[styles.tabButton,  ]}>
+      <Text style={styles.metadataText}>
+        Sub
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => handleProviderClick('idGogoDub')}  style={[styles.tabButton,  ]}>
+      <Text style={styles.metadataText}>
+        Dub
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
 <View>
  <View style={styles.tabContainer}>
       <TouchableOpacity
-        style={[styles.tabButton, activeTab2 === "episodes2" && styles.activeTab]}
-        onPress={() => setActiveTab2("episodes2")}
+        style={[styles.tabButton, activeTab === "episodes2" && styles.activeTab]}
+        onPress={() => setActiveTab("episodes2")}
       >
         <Text style={[styles.tabText, activeTab === "episodes2" && styles.activeTabText]}>
         Server 1
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.tabButton, activeTab2 === "episodes3" && styles.activeTab]}
-        onPress={() => setActiveTab2("episodes3")}
+        style={[styles.tabButton, activeTab === "episodes3" && styles.activeTab]}
+        onPress={() => setActiveTab("episodes3")}
       >
-        <Text style={[styles.tabText, activeTab2 === "episodes3" && styles.activeTabText]}>
+        <Text style={[styles.tabText, activeTab === "episodes3" && styles.activeTabText]}>
          Server 2
         </Text>
       </TouchableOpacity>
     </View>
- {item2?.id_provider && activeTab2 === "episodes2" && (
-  <View style={styles.tabContainer}>
-    <TouchableOpacity onPress={() => handleProviderClick('idGogo')} style={[styles.tabButton]}>
-      <Text style={styles.metadataText}>Sub</Text>
-    </TouchableOpacity>
-    <TouchableOpacity onPress={() => handleProviderClick('idGogoDub')} style={[styles.tabButton]}>
-      <Text style={styles.metadataText}>Dub</Text>
-    </TouchableOpacity>
-  </View>
-)}
+
   
   </View>
 
       
 
-{activeTab2 === "episodes2" ? (
-  episodes2?.episodes?.length ? (
-    <FlatList
-      data={episodes2.episodes}
-      renderItem={renderEpisode2}
-      keyExtractor={(item) => item.provider}
-      contentContainerStyle={styles.episodeList}
-    />
-  ) : (
-    <View style={{ alignItems: 'center', marginTop: 20 }}>
-      <Text style={{ fontSize: 18, color: 'gray' }}>No episodes available.</Text>
-    </View>
-  )
-) : episodes3?.length ? (
-  <FlatList
-    data={episodes3}
-    renderItem={renderEpisode3}
-    keyExtractor={(item) => item.episodeId}
-    contentContainerStyle={styles.episodeList}
-  />
-) : (
+{!episodes2?.episodes?.length && (
   <View style={{ alignItems: 'center', marginTop: 20 }}>
     <Text style={{ fontSize: 18, color: 'gray' }}>No episodes available.</Text>
   </View>
 )}
-
+  
+   
+      {activeTab === "episodes2" ? (
+      <FlatList
+        data={episodes2?.episodes}
+        renderItem={renderEpisode2}
+        keyExtractor={(item) => item.provider}
+        contentContainerStyle={styles.episodeList}
+      />
+    ) : (
+      <FlatList
+        data={episodes3}
+        renderItem={renderEpisode3}
+        keyExtractor={(item) => item.episodeId}
+        contentContainerStyle={styles.episodeList}
+      />
+    )}
       </LinearGradient>
 
       {/* Tab buttons */}

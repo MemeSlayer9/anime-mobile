@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-nati
 import { useNavigation, useRoute } from '@react-navigation/native'; // Import useNavigation and useRoute
  import MyPlaylist from '../MyAccount/MyPlaylist'; // Adjust path as needed
   import History from '../MyAccount/History'; // Adjust path as needed
-
+import Downloads from '../MyAccount/Downloads';
 const MyAccount = () => {
    const route = useRoute(); // Get the current route
   
@@ -22,7 +22,8 @@ const MyAccount = () => {
       return <MyPlaylist page={page} />;
     } else if (activeTab === 'History') {
       return <History page={page} />;
-     
+     } else if (activeTab === 'Downloads') {
+      return <Downloads page={page} />
     } else {
       return null; 
     }
@@ -43,6 +44,12 @@ const MyAccount = () => {
           onPress={() => setActiveTab('History')}
         >
           <Text style={[styles.tabText, activeTab === 'History' && styles.activeTabText]}>History</Text>
+        </TouchableOpacity>
+          <TouchableOpacity
+          style={[styles.tab, activeTab === 'Downloads' && styles.activeTab]}
+          onPress={() => setActiveTab('Downloads')}
+        >
+          <Text style={[styles.tabText, activeTab === 'Downloads' && styles.activeTabText]}>Downloads</Text>
         </TouchableOpacity>
           
       </View>

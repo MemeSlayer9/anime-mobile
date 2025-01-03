@@ -74,15 +74,15 @@ const RecentEpisodes = () => {
   }
 
   if (!episodes.length) {
-    return <Text>No data available</Text>;
+    return<Text style={styles.buttonText}>No data available</Text>;
   }
 
   return (
     <View> 
                <View style={styles.paginationContainer}>
         
-          <Text style={styles.buttonText}>Popular</Text>
-      <TouchableOpacity onPress={() => navigation.navigate('List', { initialTab: 'Popular' })}>
+          <Text style={styles.buttonText}>Trending</Text>
+      <TouchableOpacity onPress={() => navigation.navigate('List', { initialTab: 'Trending' })}>
   <Text style={styles.buttonText}>View All</Text>
 </TouchableOpacity>
 

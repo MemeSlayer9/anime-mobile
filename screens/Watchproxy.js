@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useContext } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Dimensions, TouchableOpacity, FlatList, Image, Pressable, Modal, ScrollView  } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Dimensions, TouchableOpacity, FlatList, Image, Pressable, Modal, ScrollView, StatusBar, BackHandler  } from 'react-native';
 import axios from 'axios';
 import { Video } from 'expo-av';
 import { Picker } from '@react-native-picker/picker';
@@ -7,13 +7,16 @@ import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { FullscreenContext } from './FullscreenContext'; // Import the context
+import * as NavigationBar from 'expo-navigation-bar'; // Import the NavigationBar
 
 import * as ScreenOrientation from 'expo-screen-orientation';
 import VideoPlayer from './components/VideoPlayer';
 import AsyncStorage from '@react-native-async-storage/async-storage'; // Make sure AsyncStorage is installed
 import { useEpisode } from '../context/EpisodeProvider';
+import { useID } from '../context/IdProvider';
+  import { useKeepAwake } from 'expo-keep-awake';
 
-const Watch = ({ route }) => {
+ const Watch = ({ route }) => {
         const navigation = useNavigation(); // Use the hook to access navigation
 
   const { episodeid, id, selectedItemId2, selectedEpisodeID3 } = route.params;
@@ -26,7 +29,7 @@ const Watch = ({ route }) => {
   const [playbackStatus, setPlaybackStatus] = useState(null);
   const [volume, setVolume] = useState(1.0); // Volume state
       const [episode2, setEpisodes2] = useState(null);
-const [selectedItemId, setSelectedItemId] = useState(selectedItemId2 || selectedEpisodeID3 || null); // Initialize with passed ID
+const [selectedItemId, setSelectedItemId] = useState(selectedItemId2 || selectedEpisodeID3 || selectedEpisodeId || null); // Initialize with passed ID
  
 const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
 
@@ -37,8 +40,12 @@ const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true); // State to manage visibility of controls
  const [isModalVisible, setIsModalVisible] = useState(false);
  const [savedPosition, setSavedPosition] = useState(0); // State to store the saved position
+ 
    const { selectedEpisodeId, setSelectedEpisodeId } = useEpisode(); // Use your hook in a functional component
+  const { selectId, setselectid } = useID();  // Correct destructuring
 
+
+     useKeepAwake();
 
 // Function to load playback position from AsyncStorage
 const savePlaybackPosition = async (position) => {
@@ -51,6 +58,7 @@ const savePlaybackPosition = async (position) => {
     console.error('Failed to save the playback position:', error);
   }
 };
+
 
 // Load playback position for the current episode
 const loadPlaybackPosition = async (episodeid) => {
@@ -102,25 +110,75 @@ useEffect(() => {
   }
 }, [episodeid]);
 
-const navigateBack = async (episodeid) => {
-  try {
+
+ 
+useEffect(() => {
+    const backAction = async () => {
+      try {
+        await NavigationBar.setVisibilityAsync('visible'); // Optional: Hide the nav bar on back action
+        
+       const selectedEpisodeId = selectedItemId || selectedItemId; // Use the passed episodeid or the current selectedItemId
+    const selectId = episode2.id;
+
+    // Set the selected episode ID in context or state
+    setSelectedEpisodeId(selectedEpisodeId); 
+    setselectid(selectId);
     // Get the current playback position from the video player
     const status = await videoRef.current.getStatusAsync();
     const position = status.positionMillis;
 
-     await savePlaybackPosition(position); // Save the current position
+    // Save the current position
+    await savePlaybackPosition(position);
 
-    // Navigate back to HomeTabs with the saved position
+    
+    // Navigate back to HomeTabs with the saved position and episode details
     navigation.navigate('HomeTabs', {
       showHello: true,
-      episodeid: selectedItemId,  // Make sure this is the correct selected episode ID
-      id: episode2.id,            // Pass the correct `id` for episode2
-      savedPosition: position,    // Pass the saved playback position
+      episodeid: selectedEpisodeId,  // Make sure this is the correct selected episode ID
+      id: episode2.id,               // Pass the correct id for episode2
+      savedPosition: position,       // Pass the saved playback position
     });
   } catch (error) {
     console.error('Failed to save position or navigate:', error);
   }
 };
+
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => backHandler.remove(); // Clean up the event listener on component unmount
+}, [navigation, episode2, selectedItemId]); // Include relevant dependencies
+
+
+
+const navigateBack = async (episodeid) => {
+  try {
+    const selectedEpisodeId = selectedItemId || selectedItemId; // Use the passed episodeid or the current selectedItemId
+    const selectId = episode2.id;
+
+    // Set the selected episode ID in context or state
+    setSelectedEpisodeId(selectedEpisodeId); 
+    setselectid(selectId);
+    // Get the current playback position from the video player
+    const status = await videoRef.current.getStatusAsync();
+    const position = status.positionMillis;
+
+    // Save the current position
+    await savePlaybackPosition(position);
+
+  
+    // Navigate back to HomeTabs with the saved position and episode details
+    navigation.navigate('HomeTabs', {
+      showHello: true,
+      episodeid: selectedEpisodeId,  // Make sure this is the correct selected episode ID
+      id: episode2.id,               // Pass the correct id for episode2
+      savedPosition: position,       // Pass the saved playback position
+    });
+  } catch (error) {
+    console.error('Failed to save position or navigate:', error);
+  }
+};
+
 
  
 
@@ -225,14 +283,24 @@ const handleSelectQuality = async (quality) => {
 
 
 const toggleControls = () => {
-  setControlsVisible(!controlsVisible);
+  setControlsVisible((prevVisible) => {
+    const newVisibleState = !prevVisible;
+
+    if (!newVisibleState) {
+      NavigationBar.setVisibilityAsync('hidden'); // Ensure the navigation bar stays hidden
+    }
+
+    return newVisibleState;
+  });
 };
 
 const hideControlsAfterTimeout = () => {
   setTimeout(() => {
     setControlsVisible(false);
+    NavigationBar.setVisibilityAsync('hidden'); // Keep the navigation bar hidden when controls disappear
   }, 3000); // Adjust the timeout duration as needed
 };
+
 
 useEffect(() => {
   if (isFullscreen) {
@@ -296,16 +364,20 @@ const fetchEpisodeDetail = async () => {
   }, [selectedQuality]);
 
  const handleFullscreenToggle = async () => {
-    setIsFullscreen(!isFullscreen);
+    setIsFullscreen((prev) => !prev);
 
     if (!isFullscreen) {
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      await NavigationBar.setVisibilityAsync('hidden'); // Hide the navigation bar
+    StatusBar.setHidden(true,); // Show the status bar
+
     } else {
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+      await NavigationBar.setVisibilityAsync('visible'); // Show the navigation bar
+     StatusBar.setHidden(false,); // Show the status bar
+
     }
   };
- 
-
  
   const formatTime = (milliseconds) => {
     const minutes = Math.floor(milliseconds / 60000);
@@ -320,27 +392,45 @@ const fetchEpisodeDetail = async () => {
     }
   };
 
- const handleNextEpisode = () => {
+const handleNextEpisode = () => {
   const currentIndex = episode2.episodes.findIndex((item) => item.id === selectedItemId);
   if (currentIndex < episode2.episodes.length - 1) {
     const nextEpisode = episode2.episodes[currentIndex + 1];
     if (nextEpisode) {
-      setSelectedItemId(nextEpisode.id);
+      // Update the selected episode and series ID
+      const selectedEpisodeId = nextEpisode.episodeid || nextEpisode.id;  // Get the next episode's ID
+      const selectId = episode2.id;  // Get the series ID
+
+      // Update the selected episode ID and series ID in state/context
+      setSelectedEpisodeId(selectedEpisodeId);
+      setselectid(selectId);
+
+      // Proceed with navigation to the next episode
       navigateToEpisode(nextEpisode);
     }
   }
 };
+
 
 const handlePreviousEpisode = () => {
   const currentIndex = episode2.episodes.findIndex((item) => item.id === selectedItemId);
   if (currentIndex > 0) {
     const previousEpisode = episode2.episodes[currentIndex - 1];
     if (previousEpisode) {
-      setSelectedItemId(previousEpisode.id);
+      // Update the selected episode and series ID
+      const selectedEpisodeId = previousEpisode.episodeid || previousEpisode.id;  // Get the previous episode's ID
+      const selectId = episode2.id;  // Get the series ID
+
+      // Update the selected episode ID and series ID in state/context
+      setSelectedEpisodeId(selectedEpisodeId);
+      setselectid(selectId);
+
+      // Proceed with navigation to the previous episode
       navigateToEpisode(previousEpisode);
     }
   }
 };
+
 
 const navigateToEpisode = (episode) => {
   if (episode) {
@@ -353,10 +443,10 @@ const navigateToEpisode = (episode) => {
 };
  
 useEffect(() => {
-  if (selectedItemId2 || selectedEpisodeID3) {
-    setSelectedItemId(selectedItemId2 || selectedEpisodeID3); // Update the state with the passed ID
+  if (selectedItemId2 || selectedEpisodeID3 || selectedEpisodeId) {
+    setSelectedItemId(selectedItemId2 || selectedEpisodeID3 || selectedEpisodeId); // Update the state with the passed ID
   }
-}, [selectedItemId2, selectedEpisodeID3]);
+}, [selectedItemId2, selectedEpisodeID3, selectedEpisodeId]);
 
  
   const handleVolumeChange = (value) => {
@@ -386,12 +476,12 @@ useEffect(() => {
     <TouchableOpacity
       onPress={async () => {
         const selectedEpisodeId = item.episodeid || item.id;
-
-        // Use the context here, inside the functional component
+        const selectId = episode2.id;
+          // Use the context here, inside the functional component
         setSelectedEpisodeId(selectedEpisodeId);
-
-        // Navigate to the Watch screen with the selected episode ID
-        navigation.navigate('Watch', {
+        setselectid(selectId);
+          // Navigate to the Watch screen with the selected episode ID
+        navigation.navigate('Watch', {  
           episodeid: selectedEpisodeId, // Pass the selected episode ID
           id: episode2.id,               // Passing episode2.id as a parameter
         });
@@ -411,6 +501,7 @@ useEffect(() => {
     
   <Pressable onPress={toggleControls} style={isFullscreen ? styles.videoContainerFullscreen : styles.videoContainer}>
     <View style={isFullscreen ? styles.videoContainerFullscreen : styles.videoContainer}>
+    
      <Video
       ref={videoRef}
       source={{ uri: sources }}
@@ -612,15 +703,14 @@ useEffect(() => {
       )}
     </View>
   </Pressable>
+  
  
-                 {selectedEpisodeId && <Text style={styles.selectedIdText}>Currently Selected Episode ID: {selectedEpisodeId}</Text>}
-
-               <Text style={styles.selectedIdText}>{episode2.title}</Text>
-{(selectedItemId || selectedItemId2 || selectedEpisodeID3  ) && (
-  <Text style={styles.selectedIdText}>
-    {formatTitle(selectedItemId || selectedItemId2 || selectedEpisodeID3  )}
-  </Text>
-)}
+                <Text style={styles.selectedIdText}>{episode2.title}</Text>
+  {(selectedItemId || selectedItemId2 || selectedEpisodeID3 || selectedEpisodeId ) && (
+    <Text style={styles.selectedIdText}>
+      {formatTitle(selectedItemId || selectedItemId2 || selectedEpisodeID3 || selectedEpisodeId )}
+    </Text>
+  )}
 
 <View style={styles.navigationButtonsContainer}>
   <TouchableOpacity

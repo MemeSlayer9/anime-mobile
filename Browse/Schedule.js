@@ -102,7 +102,7 @@ const Schedule = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View  style={styles.container}>
       {/* Days of the week tabs */}
       <View style={styles.tabsContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>

@@ -4,6 +4,13 @@ import { createStackNavigator } from '@react-navigation/stack';
  import Home from './Home';
  import Search from './Search';
 import MyAccount from './MyAccount';
+import MyAccount2 from './MyAccount2';
+import Login from '../MyAccount2/Login';
+import Register from '../MyAccount2/Register';
+import EditProfile from '../MyAccount2/EditProfile';
+import { AuthContext } from '../context/AuthContext';
+import { useMyUsername } from '../context/UsernameProvider'; // Import the username context
+
 import ViewAllMyPlaylist from './ViewAllMyPlaylist';
 
  import List from './List';
@@ -139,6 +146,53 @@ export function AccountStack() {
   );  
 }
  
+
+
+export function MyAccountStack2() {
+  // Get fullscreen and login state from context
+  const { isFullscreen } = useContext(FullscreenContext); 
+  const { isLoggedIn } = useContext(AuthContext);
+  const { username1, setUsername1 } = useMyUsername(); // Access the username from context
+
+  console.log('User logged in:', isLoggedIn); // Debugging to verify state
+  console.log('Current username:', username1); // Debugging the current username
+
+  return (
+   <Stack.Navigator
+      initialRouteName={isLoggedIn ? 'MyAccount2' : 'Login'} // Set initial route based on login status
+      screenOptions={{
+        headerShown: !isFullscreen,
+        headerStyle: {
+          backgroundColor: '#161616',
+        },
+        headerTintColor: '#fff',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+        headerTitle: () => <SearchHeader />, // Adjust according to your app's header component
+      }}
+    >
+      {/* Screen for logged-in users */}
+      <Stack.Screen name="MyAccount2" component={MyAccount2} />
+
+      {/* Screens for not logged-in users */}
+      {!isLoggedIn && (
+        <>
+          <Stack.Screen name="Login" component={Login} />
+          <Stack.Screen name="Register" component={Register} />
+        </>
+      )}
+
+      {/* Screens for logged-in users */}
+      {isLoggedIn && (
+        <>
+          <Stack.Screen name="EditProfile" component={EditProfile} />
+          <Stack.Screen name="MyAccount" component={MyAccount} />
+        </>
+      )}
+    </Stack.Navigator>
+  );
+}
 
 const styles = StyleSheet.create({
   logoContainer: {

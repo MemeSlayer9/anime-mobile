@@ -11,7 +11,8 @@ import { useMyId} from '../context/PlaylistProvider';
 const RecentEpisodes = () => {
   const navigation = useNavigation();
     const { selectId, setselectid } = useID();  // Correct destructuring
-    const { setsMyListID } = useMyId();  // Correct destructuring
+    const { MyListID, setsMyListID } = useMyId();  // Correct destructuring
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,8 +44,19 @@ const RecentEpisodes = () => {
   }, []);
  const handleAddBookmark = (id) => {
   setsMyListID(id);  // Set the selected ID when the bookmark is clicked
+      setIsBookmarked(true); // Mark as bookmarked
+
   console.log('Bookmark clicked, selectId:', id);
 };
+ useEffect(() => {
+    if (isBookmarked) {
+      const timer = setTimeout(() => {
+        setIsBookmarked(false); // Hide the message after 5 seconds
+      }, 2000); // 5000ms = 5 seconds
+
+      return () => clearTimeout(timer); // Cleanup the timer on component unmount
+    }
+  }, [isBookmarked]);
  
  const renderItem = ({ item }) => (
   <View key={item.id} style={[styles.itemContainer, { width: itemWidth }]}>
@@ -55,7 +67,9 @@ const RecentEpisodes = () => {
         style={styles.overlayGradient}
       />
     </View>
+    
     <View style={styles.textContainer}>
+    
       <Text style={[styles.title, { width: itemWidth - 20 }]} numberOfLines={1} ellipsizeMode="tail">
         {item.title.userPreferred}
       </Text>
@@ -72,13 +86,18 @@ const RecentEpisodes = () => {
         </TouchableOpacity>
         <View style={styles.iconContainer}>
            
-          <TouchableOpacity onPress={() => handleAddBookmark(item.id)}>
-            <Ionicons name="bookmark-outline" size={30} color="#DB202C" />
-          </TouchableOpacity>
-          
+         <TouchableOpacity onPress={() => handleAddBookmark(item.id)}>
+        <Ionicons name="bookmark-outline" size={30} color="#DB202C" />
+      </TouchableOpacity>
+
+    
         </View>
+        
       </View>
     </View>
+       {isBookmarked && MyListID === item.id && ( // Conditionally render the message
+        <Text style={{ color: '#DB202C',   }}>Added to Favorites</Text>
+      )}
   </View>
 );
   const handleNext = () => {
@@ -100,7 +119,7 @@ const RecentEpisodes = () => {
   }
 
   if (!episodes.length) {
-    return <Text>No data available</Text>;
+    return <Text style={styles.title}>No data available</Text>;
   }
 
   return (
@@ -136,7 +155,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     width: '100%',
-    height: 480, // Adjust as needed
+    height: 500, // Adjust as needed
   },
   image: {
     width: '100%',

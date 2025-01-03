@@ -68,8 +68,7 @@ const Hello = forwardRef(({ onClose, selectedEpisodeID3, selectedID3 }, ref) => 
     try {
       if (selectedEpisodeID3) {
         const key = `playbackPosition_${selectedEpisodeID3}`;
-        console.log(`Saving position ${position} for episode ${selectedEpisodeID3}`);
-        await AsyncStorage.setItem(key, JSON.stringify(position));
+         await AsyncStorage.setItem(key, JSON.stringify(position));
       }
     } catch (error) {
       console.error('Failed to save the playback position:', error);
@@ -82,8 +81,7 @@ const Hello = forwardRef(({ onClose, selectedEpisodeID3, selectedID3 }, ref) => 
       const position = await AsyncStorage.getItem(key);
       if (position !== null) {
         const parsedPosition = JSON.parse(position);
-        console.log(`Loaded saved position ${parsedPosition} for episode ${selectedEpisodeID3}`);
-        setSavedPosition(parsedPosition);
+         setSavedPosition(parsedPosition);
       } else {
          setSavedPosition(0);
       }
@@ -95,8 +93,7 @@ const Hello = forwardRef(({ onClose, selectedEpisodeID3, selectedID3 }, ref) => 
       setPlaybackStatus(status);
 
     if (!status.isPlaying && status.positionMillis > 0) {
-      console.log(`Video paused, saving position ${status.positionMillis}`);
-      savePlaybackPosition(status.positionMillis);
+       savePlaybackPosition(status.positionMillis);
     }
   };
  

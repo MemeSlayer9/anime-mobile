@@ -16,7 +16,7 @@ import { useEpisode } from '../context/EpisodeProvider';
 import { useID } from '../context/IdProvider';
 import { useDownloadedFiles } from '../context/DownloadedFilesContext';
  import * as MediaLibrary from 'expo-media-library';
-
+import { supabase } from '../supabase/supabaseClient';
 import {useDownloadedID, useDownloadedEpisodeID} from '../context/DownloadProvider';
   import { useKeepAwake } from 'expo-keep-awake';
 import * as FileSystem from 'expo-file-system';
@@ -52,12 +52,7 @@ const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
 const { downloadedFiles, setDownloadedFiles } = useDownloadedFiles();
  const [progress, setProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
-const [reloadKey, setReloadKey] = useState(0); // Key to force re-render
-
-const reloadVideo = () => {
-  console.warn('Reloading video due to NaN:NaN issue.');
-  setReloadKey((prevKey) => prevKey + 1); // Increment key to force re-render
-};
+  const [user, setUser] = useState(null);
 
  const downloadArray = downloads
     ? Object.entries(downloads).map(([resolution, url]) => ({
@@ -67,21 +62,25 @@ const reloadVideo = () => {
     : [];
 
 const downloadQuality = async (quality) => {
-  // Close the modal immediately after selecting quality
+
+   if (!user) {
+    console.log("No authenticated user found. Attempting to retrieve user...");
+    await getUser(); // Ensure the user is fetched before proceeding
+    if (!user) {
+      console.error('Download failed: No authenticated user available.');
+      return;
+    }
+  }
   setIsModalVisible2(false);
-  setIsDownloading(true); // Start the download
-  setSelectedQuality(quality); // Set the selected quality
+  setIsDownloading(true);
+  setSelectedQuality(quality);
 
   try {
-    // Find the URL for the given quality in downloadArray
     const selectedKey = downloadArray.find(item => item.resolution === quality)?.url;
+    const downloadedEpisodeID = selectedItemId; // Ensure this is set correctly
+    const downloadedID = episode2?.id; // Ensure this is set correctly
+    const imageUrl = episode2?.image; // Ensure this is set correctly
 
-    // Define downloadedEpisodeID, downloadedID, and imageUrl based on provided data
-    const downloadedEpisodeID = selectedItemId;
-    const downloadedID = episode2?.id;
-    const imageUrl = episode2?.image;
-
-    // Download video if the selected URL exists
     if (selectedKey) {
       const videoUri = `${FileSystem.documentDirectory}${downloadedEpisodeID}_${quality}.mp4`;
 
@@ -91,19 +90,32 @@ const downloadQuality = async (quality) => {
           videoUri,
           {},
           (downloadProgress) => {
-        const progressPercentage = Math.floor((downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite) * 100);
-  setProgress(progressPercentage);
-
+            const progressPercentage = Math.floor((downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite) * 100);
+            setProgress(progressPercentage);
           }
         );
 
         const videoResult = await downloadResumable.downloadAsync();
         console.log('Downloaded video to:', videoResult.uri);
 
-        setDownloadedFiles((prevFiles) => [
-          ...prevFiles,
-          { quality, id: downloadedEpisodeID, uri: videoResult.uri, type: 'Video' }
-        ]);
+        const downloadedFile = {
+          quality,
+          id: downloadedEpisodeID,
+          uri: videoResult.uri,
+          file_name: videoUri.split('/').pop(), // Set the file name here
+          user_id: null, // Replace this with the actual user ID from your context
+          episodeId: downloadedID,
+          imageUrl: imageUrl,
+        };
+
+        // Add file to Supabase
+        const supabaseData = await addFileToSupabase(downloadedFile);
+        
+        // If Supabase insertion was successful, update the local state
+        if (supabaseData) {
+          setDownloadedFiles((prevFiles) => [...prevFiles, downloadedFile]);
+        }
+
       } catch (error) {
         console.error('Video download failed:', error.message);
       }
@@ -111,19 +123,83 @@ const downloadQuality = async (quality) => {
       console.error('Error: No URL found for selected quality:', quality);
     }
 
-     
-
   } catch (error) {
     console.error('Error in downloadQuality function:', error.message);
   } finally {
-    setIsDownloading(false); // End download
-    setProgress(0); // Reset progress for next download
+    setIsDownloading(false);
+    setProgress(0);
   }
 };
 
+  const addFileToSupabase = async (file) => {
+    if (!user) {
+      console.error('No user is authenticated.');
+      return;
+    }
 
- 
- 
+    try {
+      const { data, error } = await supabase
+        .from('downloaded_files')
+        .insert({
+          uri: file.uri,
+          quality: file.quality,
+          file_name: file.file_name,
+        user_id: user.id,
+          episode_id: file.episodeId || null,
+          image_url: file.imageUrl || null,
+        })
+        .select('*');
+
+      if (error) {
+        console.error('Failed to add file to Supabase:', error.message);
+        throw error;
+      }
+
+      console.log('File added to Supabase:', data);
+      return data;
+    } catch (error) {
+      console.error('Error in addFileToSupabase:', error.message);
+      return null;
+    }
+  };
+
+const getUser = async () => {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('Error fetching user:', error.message);
+      return null;
+    }
+    console.log('Fetched user:', data.user);
+    setUser(data.user);
+    await fetchDownloadedFiles(data.user.id); // Fetch files after user is set
+    return data.user;
+  } catch (error) {
+    console.error('Unexpected error fetching user:', error);
+    return null;
+  }
+};
+
+  const fetchDownloadedFiles = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('downloaded_files')
+        .select('*')
+        .eq('user_id', userId); // Fetch files for the specific user
+
+      if (error) throw error;
+
+      console.log('Fetched downloaded files:', data); // Log the downloaded files
+      setDownloadedFiles(data); // Set fetched files
+    } catch (error) {
+      console.error('Error fetching downloaded files:', error.message);
+    }
+  };
+
+  // Fetch user on component mount
+  useEffect(() => {
+    getUser(); // Fetch user and their files on mount
+  }, []);
 
 
 
@@ -162,20 +238,9 @@ const loadPlaybackPosition = async (episodeid) => {
 
 // Handle playback status update to save position when paused or stopped
 const handlePlaybackStatusUpdate = (status) => {
-  if (status.isLoaded) {
-    // Ensure positionMillis and durationMillis are valid before using them
-    if (!isNaN(status.positionMillis) && !isNaN(status.durationMillis)) {
-      setPlaybackStatus(status);
-
-      // Save the current position if playback stops
-      if (!status.isPlaying && status.positionMillis > 0) {
-        savePlaybackPosition(status.positionMillis);
-      }
-    } else {
-      console.error("Detected NaN issue in playback status:", status);
-    }
-  } else {
-    console.warn("Playback status indicates video is not yet loaded:", status);
+  setPlaybackStatus(status);
+  if (!status.isPlaying && status.positionMillis > 0) {
+     savePlaybackPosition(status.positionMillis);
   }
 };
 
@@ -334,7 +399,8 @@ const handleSelectQuality = async (quality) => {
       const selectedSource = qualityOptions.find(source => source.quality === quality);
       if (selectedSource) {
         setSelectedQuality(quality);  // Update selected quality
-         // Pause the video before changing the source
+
+        // Pause the video before changing the source
         await videoRef.current.pauseAsync();
 
         // Unload the current video to reset any potential conflicts
@@ -348,8 +414,6 @@ const handleSelectQuality = async (quality) => {
             positionMillis: currentPosition,  // Continue from the same position
           }
         );
-            setSavedPosition(currentPosition); // Store it in state for later use
-
 
         // After loading the video, force an update to playback status
         videoRef.current.setOnPlaybackStatusUpdate(handlePlaybackStatusUpdate);
@@ -461,39 +525,14 @@ const fetchDownload = async () => {
     fetchDownload();
   }, [episodeid, id]); // Fetch data whenever episodeid or id changes
 
-  const handleQualityChange = (newQuality) => {
-  if (videoRef.current && playbackStatus) {
-    const currentPosition = playbackStatus.positionMillis; // Save current position
-    setSavedPosition(currentPosition); // Store it in state for later use
-  }
-
-  setSelectedQuality(newQuality); // Update the selected quality
-};
-
- useEffect(() => {
-  if (sources) {
-    const selectedSource = qualityOptions.find(source => source.quality === selectedQuality);
-    if (selectedSource) {
-      setSources(selectedSource.url); // Change the video source
-
-      // Seek to the saved position after a brief delay
-      const seekToSavedPosition = async () => {
-        if (videoRef.current && savedPosition) {
-          try {
-            await videoRef.current.setPositionAsync(savedPosition);
-          } catch (error) {
-            console.error("Failed to seek to saved position:", error);
-          }
-        }
-      };
-
-      setTimeout(seekToSavedPosition, 500); // Adjust delay if necessary
+  useEffect(() => {
+    if (sources) {
+      const selectedSource = qualityOptions.find(source => source.quality === selectedQuality);
+      if (selectedSource) {
+        setSources(selectedSource.url);
+      }
     }
-  }
-}, [selectedQuality]);
-
-
-
+  }, [selectedQuality]);
 
  const handleFullscreenToggle = async () => {
     setIsFullscreen((prev) => !prev);
@@ -518,21 +557,11 @@ const fetchDownload = async () => {
   };
  
 
-const handleSliderChange = (value) => {
-  if (
-    videoRef.current &&
-    playbackStatus &&
-    !isNaN(playbackStatus.durationMillis) // Ensure duration is valid
-  ) {
-    const targetPosition = value * playbackStatus.durationMillis;
-
-    if (!isNaN(targetPosition)) {
-      videoRef.current.setPositionAsync(targetPosition);
-    } else {
-      console.error("Slider target position is NaN. Skipping seek.");
+  const handleSliderChange = (value) => {
+    if (videoRef.current && playbackStatus) {
+      videoRef.current.setPositionAsync(value * playbackStatus.durationMillis);
     }
-  }
-};
+  };
 
 const handleNextEpisode = () => {
   const currentIndex = episode2.episodes.findIndex((item) => item.id === selectedItemId);
@@ -599,15 +628,8 @@ useEffect(() => {
   };
 
   if (loading) {
-  return (
-    <View style={styles.loadingContainer}>
-      <Image
-        source={{ uri: 'https://media.tenor.com/On7kvXhzml4AAAAj/loading-gif.gif' }}
-        style={styles.loadingGif}
-      />
-    </View>
-  );
-}
+    return <ActivityIndicator size="large" color="#0000ff" />;
+  }
 
    if (!episode2) {
    return (
@@ -652,13 +674,9 @@ useEffect(() => {
     
   <Pressable onPress={toggleControls} style={isFullscreen ? styles.videoContainerFullscreen : styles.videoContainer}>
     <View style={isFullscreen ? styles.videoContainerFullscreen : styles.videoContainer}>
-         
-  
           {sources && (
 
      <Video
-       key={reloadKey} // Change key to force re-mounting
-
       ref={videoRef}
       source={{ uri: sources }}
       rate={1.0}
@@ -668,23 +686,14 @@ useEffect(() => {
       shouldPlay={isPlaying}
       useNativeControls={false}
       style={isFullscreen ? styles.videoFullscreen : styles.video}
-    onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-        onLoad={(status) => {
-          if (status.isLoaded) {
-            console.log('Video metadata loaded:', status);
-            if (savedPosition > 0) {
-              videoRef.current.setPositionAsync(savedPosition);
-            }
-          } else {
-            console.error('Failed to load video metadata:', status);
-          }
-        }}
-        onError={(error) => {
-          console.error('Video error:', error);
-          reloadVideo(); // Automatically reload the page on error
-        }}
-      />
- 
+      onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+      onLoad={async () => {
+        // Ensure video starts from saved position when it loads
+        if (savedPosition > 0) {
+           await videoRef.current.setPositionAsync(savedPosition);
+        }
+      }}
+    />
         )}
 
   
@@ -709,19 +718,10 @@ useEffect(() => {
     </TouchableOpacity>
     
 
- <>
-        {/* Show loading indicator if video is loading or not started */}
-        {(loading || (playbackStatus && playbackStatus.positionMillis === 0 && !playbackStatus.isPlaying)) ? (
-          <View style={styles.loadingIndicatorContainer}>
-            <ActivityIndicator size="large" color="#ffff" />
-           </View>
-        ) : (
-          // Show play/pause button when the video is not loading
-          <TouchableOpacity onPress={() => handlePlayPause(!isPlaying)} style={styles.controlButton}>
-            <Ionicons name={isPlaying ? "pause" : "play"} size={40} color="white" />
-          </TouchableOpacity>
-        )}
-      </>
+    <TouchableOpacity onPress={() => handlePlayPause(!isPlaying)} style={styles.centeredControlButton}>
+      <Ionicons name={isPlaying ? "pause" : "play"} size={50} color="white" />
+    </TouchableOpacity>
+
     <TouchableOpacity
       onPress={handleNextEpisode}
       disabled={episode2.episodes.findIndex((item) => item.id === selectedItemId) >= episode2.episodes.length - 1}
@@ -761,19 +761,9 @@ useEffect(() => {
     </TouchableOpacity>
     
 
-    <>
-        {/* Show loading indicator if video is loading or not started */}
-        {(loading || (playbackStatus && playbackStatus.positionMillis === 0 && !playbackStatus.isPlaying)) ? (
-          <View style={styles.loadingIndicatorContainer}>
-            <ActivityIndicator size="large" color="#ffff" />
-           </View>
-        ) : (
-          // Show play/pause button when the video is not loading
-          <TouchableOpacity onPress={() => handlePlayPause(!isPlaying)} style={styles.controlButton}>
-            <Ionicons name={isPlaying ? "pause" : "play"} size={40} color="white" />
-          </TouchableOpacity>
-        )}
-      </>
+    <TouchableOpacity onPress={() => handlePlayPause(!isPlaying)} style={styles.centeredControlButton}>
+      <Ionicons name={isPlaying ? "pause" : "play"} size={50} color="white" />
+    </TouchableOpacity>
 
     <TouchableOpacity
       onPress={handleNextEpisode}
@@ -800,20 +790,12 @@ useEffect(() => {
       {controlsVisible && (
         <View style={styles.controls}>
           {!isFullscreen && (
-      <>
-        {/* Show loading indicator if video is loading or not started */}
-        {(loading || (playbackStatus && playbackStatus.positionMillis === 0 && !playbackStatus.isPlaying)) ? (
-          <View style={styles.loadingIndicatorContainer}>
-            <ActivityIndicator size="small" color="#ffff" />
-           </View>
-        ) : (
-          // Show play/pause button when the video is not loading
-          <TouchableOpacity onPress={() => handlePlayPause(!isPlaying)} style={styles.controlButton}>
-            <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="white" />
-          </TouchableOpacity>
-        )}
-      </>
-    )}
+            <TouchableOpacity onPress={() => handlePlayPause(!isPlaying)} style={styles.controlButton}>
+              <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="white" />
+            </TouchableOpacity>
+            
+                      
+          )}
            
 
           
@@ -883,21 +865,16 @@ useEffect(() => {
       
 
       {playbackStatus && controlsVisible && (
-      <Slider
-  style={styles.slider}
-  minimumValue={0}
-  maximumValue={1}
-  value={
-    playbackStatus.durationMillis
-      ? playbackStatus.positionMillis / playbackStatus.durationMillis
-      : 0 // Prevent NaN display in slider
-  }
-  onValueChange={handleSliderChange}
-  thumbTintColor="white"  
-  minimumTrackTintColor="#DB202C"
-  maximumTrackTintColor="gray"
-/>
-
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={1}
+          value={playbackStatus.positionMillis / playbackStatus.durationMillis}
+          onValueChange={handleSliderChange}
+          thumbTintColor="white"
+          minimumTrackTintColor="#DB202C"
+          maximumTrackTintColor="gray"
+        />
       )}
     </View>
   </Pressable>
@@ -1058,14 +1035,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   episodeContainer: {
-   flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    backgroundColor: 'rgb(36, 34, 53)',
-    borderRadius: 10,
+  flexDirection: 'row',
     padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
   },
-  
+  episodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 5,
+  },
   episodeTitle: {
     color: 'white', // Ensure the text color is visible
     fontSize: 16,
@@ -1198,24 +1177,6 @@ closeButton: {
     color: 'white',
     fontSize: 18,
   },
-   loadingContainer: {
-    flex: 1,
-    backgroundColor: '#161616',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-    loadingGif: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
-    marginTop: 20,
-    
-  },
-  loadingIndicatorContainer: {
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-},
    
 });
 

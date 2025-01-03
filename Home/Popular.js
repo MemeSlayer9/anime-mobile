@@ -17,16 +17,28 @@ const RecentEpisodes = () => {
   const Close = async () => {
     await handleClose(); // Use the context's handlePauseVideo function
   };
-  const fetchData = async () => {
+const fetchData = async () => {
+  setLoading(true); // Ensure loading is set to true at the start
+  try {
+    // Attempt to fetch from the primary API
+    const response = await axios.get('https://juanito66.vercel.app/meta/anilist/popular');
+    setEpisodes(response.data.results);
+    console.log('Fetched data from primary API');
+  } catch (error) {
+    console.error('Failed to fetch data from primary API, attempting fallback:', error);
     try {
-      const response = await axios.get('https://juanito66.vercel.app/meta/anilist/popular');
-      setEpisodes(response.data.results);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
+      // Fallback to the secondary API
+      const fallbackResponse = await axios.get(`https://api.amvstr.me/api/v2/popular`);
+      setEpisodes(fallbackResponse.data.results);
+      console.log('Fetched data from fallback API');
+    } catch (fallbackError) {
+      console.error('Failed to fetch data from both APIs:', fallbackError);
     }
-  };
+  } finally {
+    setLoading(false); // Loading is set to false once all attempts are finished
+  }
+};
+
 
   useEffect(() => {
     fetchData();
@@ -43,7 +55,8 @@ const RecentEpisodes = () => {
       navigation.navigate('EpisodeDetail', { id: item.id })
       }}
     > 
-        <Image source={{ uri: item.image }} style={styles.image} />
+      <Image  source={{ uri: item?.image ? item?.image : item?.coverImage?.large }} 
+ style={styles.image} />
         <View style={styles.textContainer}>
           {/* Ensure title fits within the image width */}
           <Text style={[styles.title, { width: 120 }]} numberOfLines={1} ellipsizeMode="tail">
@@ -74,7 +87,7 @@ const RecentEpisodes = () => {
   }
 
   if (!episodes.length) {
-    return <Text>No data available</Text>;
+    return <Text style={styles.buttonText}>No data available</Text>;
   }
 
   return (
